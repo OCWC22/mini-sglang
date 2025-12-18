@@ -393,57 +393,6 @@ Radix Tree Prefix Cache organizes cached KV data by **token sequences**, enablin
 │  │   After request completes, new prefix is added to tree for future reuse   │   │
 │  └──────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                  │
-└─────────────────────────────────────────────────────────────────────────────────┘     
-
-# Radix Tree Prefix Cache vs Paged Attention: A Visual Comparison
-
-*(Continued from previous section)*
-
----
-
-### Radix Tree Operations (from Mini-SGLang code)
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                      RADIX TREE OPERATIONS (Code Reference)                      │
-│                                                                                  │
-│  From: python/minisgl/kvcache/radix_manager.py                                   │
-│                                                                                  │
-│  ┌──────────────────────────────────────────────────────────────────────────┐   │
-│  │ OPERATION 1: match_prefix(input_ids)                                      │   │
-│  │                                                                           │   │
-│  │   def match_prefix(self, input_ids: torch.Tensor):                        │   │
-│  │       node, prefix_len = self._walk(input_ids)  # Walk tree               │   │
-│  │       # Collect KV indices by walking back up                             │   │
-│  │       value_list = []                                                     │   │
-│  │       while not node.is_root():                                           │   │
-│  │           value_list.append(node.value)  # KV cache indices               │   │
-│  │           node = node.parent                                              │   │
-│  │       return RadixCacheHandle(prefix_len, node), torch.cat(value_list)    │   │
-│  │                                                                           │   │
-│  │   Returns: (handle, indices_tensor)                                       │   │
-│  │     - handle.cached_len = number of tokens already cached                 │   │
-│  │     - indices_tensor = KV cache locations for cached tokens               │   │
-│  └──────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                  │
-│  ┌──────────────────────────────────────────────────────────────────────────┐   │
-│  │ OPERATION 2: insert_prefix(input_ids, indices)                            │   │
-│  │                                                                           │   │
-│  │   def insert_prefix(self, input_ids: torch.Tensor, indices: torch.Tensor):│   │
-│  │       node, prefix_len = self._walk(input_ids)                            │   │
-│  │       if prefix_len < len(input_ids):                                     │   │
-│  │           # Create new node for unmatched suffix                          │   │
-│  │           new_node = RadixTreeNode()                                      │   │
-│  │           new_node.set_key_value(                                         │   │
-│  │               input_ids[prefix_len:],   # Token sequence                  │   │
-│  │               indices[prefix_len:]      # KV cache indices                │   │
-│  │           )                                                               │   │
-│  │           new_node.set_parent(node)                                       │   │
-│  │       return prefix_len  # How much was already cached                    │   │
-│  │                                                                           │   │
-│  │   After request completes, new prefix is added to tree for future reuse   │   │
-│  └──────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                  │
 │  ┌──────────────────────────────────────────────────────────────────────────┐   │
 │  │ OPERATION 3: evict(size)                                                  │   │
 │  │                                                                           │   │
@@ -808,12 +757,8 @@ Radix Tree Prefix Cache organizes cached KV data by **token sequences**, enablin
 │  │                                 │                                         │  │
 │  │                                 │                                         │  │
 │  └─────────────────────────────────┴─────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────────────────┘
-
-
-# Radix Tree Prefix Cache vs Paged Attention: A Visual Comparison
-
-*(Continued from previous section)*
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
