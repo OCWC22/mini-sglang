@@ -1,0 +1,508 @@
+OpenAI-Compatible Server - vLLM 
+Skip to content
+You are viewing the latest developer preview docs. Click here to view docs for the latest stable release. 
+vLLM
+OpenAI-Compatible Server
+Initializing search
+GitHub
+Home
+User Guide
+Developer Guide
+API Reference
+Community
+vLLM
+GitHub
+Home
+User Guide
+User Guide
+User Guide
+vLLM V1
+General
+General
+Frequently Asked Questions
+Production Metrics
+Reproducibility
+Security
+Troubleshooting
+Usage Stats Collection
+Inference and Serving
+Inference and Serving
+Offline Inference
+OpenAI-Compatible Server
+OpenAI-Compatible Server
+Table of contents
+Supported APIs
+Chat Template
+Extra Parameters
+Extra HTTP Headers
+API Reference
+Completions API
+Extra parameters
+Chat API
+Extra parameters
+Embeddings API
+Multi-modal inputs
+Extra parameters
+Transcriptions API
+Extra Parameters
+Tokenizer API
+Pooling API
+Classification API
+Example Requests
+Extra parameters
+Score API
+Single inference
+Batch inference
+Extra parameters
+Re-rank API
+Example Request
+Extra parameters
+Distributed Inference and Serving
+Integrations
+Deployment
+Deployment
+Using Docker
+Using Kubernetes
+Using Nginx
+Frameworks
+Integrations
+Training
+Training
+Reinforcement Learning from Human Feedback
+Transformers Reinforcement Learning
+Configuration
+Configuration
+Summary
+Conserving Memory
+Engine Arguments
+Environment Variables
+Model Resolution
+Optimization and Tuning
+Server Arguments
+Models
+Models
+Supported Models
+Generative Models
+Pooling Models
+Extensions
+Features
+Features
+Compatibility Matrix
+Automatic Prefix Caching
+Disaggregated Prefilling (experimental)
+LoRA Adapters
+Multimodal Inputs
+Prompt Embedding Inputs
+Reasoning Outputs
+Speculative Decoding
+Structured Outputs
+Tool Calling
+Quantization
+Developer Guide
+API Reference
+Community
+Table of contents
+Supported APIs
+Chat Template
+Extra Parameters
+Extra HTTP Headers
+API Reference
+Completions API
+Extra parameters
+Chat API
+Extra parameters
+Embeddings API
+Multi-modal inputs
+Extra parameters
+Transcriptions API
+Extra Parameters
+Tokenizer API
+Pooling API
+Classification API
+Example Requests
+Extra parameters
+Score API
+Single inference
+Batch inference
+Extra parameters
+Re-rank API
+Example Request
+Extra parameters
+OpenAI-Compatible Server 
+vLLM provides an HTTP server that implements OpenAI's Completions API , Chat API , and more! This functionality lets you serve models and interact with them using an HTTP client. 
+In your terminal, you can install vLLM, then start the server with the 
+vllm serve command. (You can also use our Docker image.) 
+vllm serve NousResearch/Meta-Llama-3-8B-Instruct \ --dtype auto \ --api-key token-abc123
+To call the server, in your preferred text editor, create a script that uses an HTTP client. Include any messages that you want to send to the model. Then run that script. Below is an example script using the official OpenAI Python client . 
+from openai import OpenAI client = OpenAI ( base_url = "http://localhost:8000/v1" , api_key = "token-abc123" , ) completion = client . chat . completions . create ( model = "NousResearch/Meta-Llama-3-8B-Instruct" , messages = [ { "role" : "user" , "content" : "Hello!" } ] ) print ( completion . choices [ 0 ] . message ) 
+Tip 
+vLLM supports some parameters that are not supported by OpenAI, 
+top_k for example.
+You can pass these parameters to vLLM using the OpenAI client in the 
+extra_body parameter of your requests, i.e. 
+extra_body={"top_k": 50} for 
+top_k . 
+Warning 
+By default, the server applies 
+generation_config.json from the Hugging Face model repository if it exists. This means the default values of certain sampling parameters can be overridden by those recommended by the model creator. 
+To disable this behavior, please pass 
+--generation-config vllm when launching the server. 
+Supported APIs ¶ 
+We currently support the following OpenAI APIs: 
+Completions API ( 
+/v1/completions ) 
+Only applicable to text generation models ( 
+--task generate ). 
+Note: 
+suffix parameter is not supported. 
+Chat Completions API ( 
+/v1/chat/completions ) 
+Only applicable to text generation models ( 
+--task generate ) with a chat template . 
+Note: 
+parallel_tool_calls and 
+user parameters are ignored. 
+Embeddings API ( 
+/v1/embeddings ) 
+Only applicable to embedding models ( 
+--task embed ). 
+Transcriptions API ( 
+/v1/audio/transcriptions ) 
+Only applicable to Automatic Speech Recognition (ASR) models (OpenAI Whisper) ( 
+--task generate ). 
+In addition, we have the following custom APIs: 
+Tokenizer API ( 
+/tokenize , 
+/detokenize ) 
+Applicable to any model with a tokenizer. 
+Pooling API ( 
+/pooling ) 
+Applicable to all pooling models . 
+Classification API ( 
+/classify ) 
+Only applicable to classification models ( 
+--task classify ). 
+Score API ( 
+/score ) 
+Applicable to embedding models and cross-encoder models ( 
+--task score ). 
+Re-rank API ( 
+/rerank , 
+/v1/rerank , 
+/v2/rerank ) 
+Implements Jina AI's v1 re-rank API 
+Also compatible with Cohere's v1 & v2 re-rank APIs 
+Jina and Cohere's APIs are very similar; Jina's includes extra information in the rerank endpoint's response. 
+Only applicable to cross-encoder models ( 
+--task score ). 
+Chat Template ¶ 
+In order for the language model to support chat protocol, vLLM requires the model to include
+a chat template in its tokenizer configuration. The chat template is a Jinja2 template that
+specifies how are roles, messages, and other chat-specific tokens are encoded in the input. 
+An example chat template for 
+NousResearch/Meta-Llama-3-8B-Instruct can be found here 
+Some models do not provide a chat template even though they are instruction/chat fine-tuned. For those model,
+you can manually specify their chat template in the 
+--chat-template parameter with the file path to the chat
+template, or the template in string form. Without a chat template, the server will not be able to process chat
+and all chat requests will error. 
+vllm serve <model> --chat-template ./path-to-chat-template.jinja
+vLLM community provides a set of chat templates for popular models. You can find them under the examples directory. 
+With the inclusion of multi-modal chat APIs, the OpenAI spec now accepts chat messages in a new format which specifies
+both a 
+type and a 
+text field. An example is provided below: 
+completion = client . chat . completions . create ( model = "NousResearch/Meta-Llama-3-8B-Instruct" , messages = [ { "role" : "user" , "content" : [{ "type" : "text" , "text" : "Classify this sentiment: vLLM is wonderful!" }]} ] ) 
+Most chat templates for LLMs expect the 
+content field to be a string, but there are some newer models like
+meta-llama/Llama-Guard-3-1B that expect the content to be formatted according to the OpenAI schema in the
+request. vLLM provides best-effort support to detect this automatically, which is logged as a string like
+"Detected the chat template content format to be..." , and internally converts incoming requests to match
+the detected format, which can be one of: 
+"string" : A string. 
+Example: 
+"Hello world" 
+"openai" : A list of dictionaries, similar to OpenAI schema. 
+Example: 
+[{"type": "text", "text": "Hello world!"}] 
+If the result is not what you expect, you can set the 
+--chat-template-content-format CLI argument
+to override which format to use. 
+Extra Parameters ¶ 
+vLLM supports a set of parameters that are not part of the OpenAI API.
+In order to use them, you can pass them as extra parameters in the OpenAI client.
+Or directly merge them into the JSON payload if you are using HTTP call directly. 
+completion = client . chat . completions . create ( model = "NousResearch/Meta-Llama-3-8B-Instruct" , messages = [ { "role" : "user" , "content" : "Classify this sentiment: vLLM is wonderful!" } ], extra_body = { "guided_choice" : [ "positive" , "negative" ] } ) 
+Extra HTTP Headers ¶ 
+Only 
+X-Request-Id HTTP request header is supported for now. It can be enabled
+with 
+--enable-request-id-headers . 
+Note that enablement of the headers can impact performance significantly at high QPS
+rates. We recommend implementing HTTP headers at the router level (e.g. via Istio),
+rather than within the vLLM layer for this reason.
+See this PR for more details. 
+completion = client . chat . completions . create ( model = "NousResearch/Meta-Llama-3-8B-Instruct" , messages = [ { "role" : "user" , "content" : "Classify this sentiment: vLLM is wonderful!" } ], extra_headers = { "x-request-id" : "sentiment-classification-00001" , } ) print ( completion . _request_id ) completion = client . completions . create ( model = "NousResearch/Meta-Llama-3-8B-Instruct" , prompt = "A robot may not injure a human being" , extra_headers = { "x-request-id" : "completion-test" , } ) print ( completion . _request_id ) 
+API Reference ¶ 
+Completions API ¶ 
+Our Completions API is compatible with OpenAI's Completions API ;
+you can use the official OpenAI Python client to interact with it. 
+Code example: examples/online_serving/openai_completion_client.py 
+Extra parameters ¶ 
+The following sampling parameters are supported. 
+use_beam_search : bool = False top_k : Optional [ int ] = None min_p : Optional [ float ] = None repetition_penalty : Optional [ float ] = None length_penalty : float = 1.0 stop_token_ids : Optional [ list [ int ]] = Field ( default_factory = list ) include_stop_str_in_output : bool = False ignore_eos : bool = False min_tokens : int = 0 skip_special_tokens : bool = True spaces_between_special_tokens : bool = True truncate_prompt_tokens : Optional [ Annotated [ int , Field ( ge = 1 )]] = None allowed_token_ids : Optional [ list [ int ]] = None prompt_logprobs : Optional [ int ] = None 
+The following extra parameters are supported: 
+add_special_tokens : bool = Field ( default = True , description = ( "If true (the default), special tokens (e.g. BOS) will be added to " "the prompt." ), ) response_format : Optional [ AnyResponseFormat ] = Field ( default = None , description = ( "Similar to chat completion, this parameter specifies the format " "of output. Only {'type': 'json_object'}, {'type': 'json_schema'}" ", {'type': 'structural_tag'}, or {'type': 'text' } is supported." ), ) guided_json : Optional [ Union [ str , dict , BaseModel ]] = Field ( default = None , description = "If specified, the output will follow the JSON schema." , ) guided_regex : Optional [ str ] = Field ( default = None , description = ( "If specified, the output will follow the regex pattern." ), ) guided_choice : Optional [ list [ str ]] = Field ( default = None , description = ( "If specified, the output will be exactly one of the choices." ), ) guided_grammar : Optional [ str ] = Field ( default = None , description = ( "If specified, the output will follow the context free grammar." ), ) guided_decoding_backend : Optional [ str ] = Field ( default = None , description = ( "If specified, will override the default guided decoding backend " "of the server for this specific request. If set, must be one of " "'outlines' / 'lm-format-enforcer'" ), ) guided_whitespace_pattern : Optional [ str ] = Field ( default = None , description = ( "If specified, will override the default whitespace pattern " "for guided json decoding." ), ) priority : int = Field ( default = 0 , description = ( "The priority of the request (lower means earlier handling; " "default: 0). Any priority other than 0 will raise an error " "if the served model does not use priority scheduling." ), ) logits_processors : Optional [ LogitsProcessors ] = Field ( default = None , description = ( "A list of either qualified names of logits processors, or " "constructor objects, to apply when sampling. A constructor is " "a JSON object with a required 'qualname' field specifying the " "qualified name of the processor class/factory, and optional " "'args' and 'kwargs' fields containing positional and keyword " "arguments. For example: {'qualname': " "'my_module.MyLogitsProcessor', 'args': [1, 2], 'kwargs': " "{'param': 'value'}}." )) return_tokens_as_token_ids : Optional [ bool ] = Field ( default = None , description = ( "If specified with 'logprobs', tokens are represented " " as strings of the form 'token_id: {token_id} ' so that tokens " "that are not JSON-encodable can be identified." )) kv_transfer_params : Optional [ dict [ str , Any ]] = Field ( default = None , description = "KVTransfer parameters used for disaggregated serving." ) 
+Chat API ¶ 
+Our Chat API is compatible with OpenAI's Chat Completions API ;
+you can use the official OpenAI Python client to interact with it. 
+We support both Vision - and
+Audio -related parameters;
+see our Multimodal Inputs guide for more information.
+- Note: 
+image_url.detail parameter is not supported. 
+Code example: examples/online_serving/openai_chat_completion_client.py 
+Extra parameters ¶ 
+The following sampling parameters are supported. 
+best_of : Optional [ int ] = None use_beam_search : bool = False top_k : Optional [ int ] = None min_p : Optional [ float ] = None repetition_penalty : Optional [ float ] = None length_penalty : float = 1.0 stop_token_ids : Optional [ list [ int ]] = Field ( default_factory = list ) include_stop_str_in_output : bool = False ignore_eos : bool = False min_tokens : int = 0 skip_special_tokens : bool = True spaces_between_special_tokens : bool = True truncate_prompt_tokens : Optional [ Annotated [ int , Field ( ge = 1 )]] = None prompt_logprobs : Optional [ int ] = None 
+The following extra parameters are supported: 
+echo : bool = Field ( default = False , description = ( "If true, the new message will be prepended with the last message " "if they belong to the same role." ), ) add_generation_prompt : bool = Field ( default = True , description = ( "If true, the generation prompt will be added to the chat template. " "This is a parameter used by chat template in tokenizer config of the " "model." ), ) continue_final_message : bool = Field ( default = False , description = ( "If this is set, the chat will be formatted so that the final " "message in the chat is open-ended, without any EOS tokens. The " "model will continue this message rather than starting a new one. " "This allows you to \" prefill \" part of the model's response for it. " "Cannot be used at the same time as `add_generation_prompt`." ), ) add_special_tokens : bool = Field ( default = False , description = ( "If true, special tokens (e.g. BOS) will be added to the prompt " "on top of what is added by the chat template. " "For most models, the chat template takes care of adding the " "special tokens so this should be set to false (as is the " "default)." ), ) documents : Optional [ list [ dict [ str , str ]]] = Field ( default = None , description = ( "A list of dicts representing documents that will be accessible to " "the model if it is performing RAG (retrieval-augmented generation)." " If the template does not support RAG, this argument will have no " "effect. We recommend that each document should be a dict containing " " \" title \" and \" text \" keys." ), ) chat_template : Optional [ str ] = Field ( default = None , description = ( "A Jinja template to use for this conversion. " "As of transformers v4.44, default chat template is no longer " "allowed, so you must provide a chat template if the tokenizer " "does not define one." ), ) chat_template_kwargs : Optional [ dict [ str , Any ]] = Field ( default = None , description = ( "Additional kwargs to pass to the template renderer. " "Will be accessible by the chat template." ), ) mm_processor_kwargs : Optional [ dict [ str , Any ]] = Field ( default = None , description = ( "Additional kwargs to pass to the HF processor." ), ) guided_json : Optional [ Union [ str , dict , BaseModel ]] = Field ( default = None , description = ( "If specified, the output will follow the JSON schema." ), ) guided_regex : Optional [ str ] = Field ( default = None , description = ( "If specified, the output will follow the regex pattern." ), ) guided_choice : Optional [ list [ str ]] = Field ( default = None , description = ( "If specified, the output will be exactly one of the choices." ), ) guided_grammar : Optional [ str ] = Field ( default = None , description = ( "If specified, the output will follow the context free grammar." ), ) structural_tag : Optional [ str ] = Field ( default = None , description = ( "If specified, the output will follow the structural tag schema." ), ) guided_decoding_backend : Optional [ str ] = Field ( default = None , description = ( "If specified, will override the default guided decoding backend " "of the server for this specific request. If set, must be either " "'outlines' / 'lm-format-enforcer'" ), ) guided_whitespace_pattern : Optional [ str ] = Field ( default = None , description = ( "If specified, will override the default whitespace pattern " "for guided json decoding." ), ) priority : int = Field ( default = 0 , description = ( "The priority of the request (lower means earlier handling; " "default: 0). Any priority other than 0 will raise an error " "if the served model does not use priority scheduling." ), ) request_id : str = Field ( default_factory = lambda : f " { random_uuid () } " , description = ( "The request_id related to this request. If the caller does " "not set it, a random_uuid will be generated. This id is used " "through out the inference process and return in response." ), ) logits_processors : Optional [ LogitsProcessors ] = Field ( default = None , description = ( "A list of either qualified names of logits processors, or " "constructor objects, to apply when sampling. A constructor is " "a JSON object with a required 'qualname' field specifying the " "qualified name of the processor class/factory, and optional " "'args' and 'kwargs' fields containing positional and keyword " "arguments. For example: {'qualname': " "'my_module.MyLogitsProcessor', 'args': [1, 2], 'kwargs': " "{'param': 'value'}}." )) return_tokens_as_token_ids : Optional [ bool ] = Field ( default = None , description = ( "If specified with 'logprobs', tokens are represented " " as strings of the form 'token_id: {token_id} ' so that tokens " "that are not JSON-encodable can be identified." )) cache_salt : Optional [ str ] = Field ( default = None , description = ( "If specified, the prefix cache will be salted with the provided " "string to prevent an attacker to guess prompts in multi-user " "environments. The salt should be random, protected from " "access by 3rd parties, and long enough to be " "unpredictable (e.g., 43 characters base64-encoded, corresponding " "to 256 bit). Not supported by vLLM engine V0." )) kv_transfer_params : Optional [ dict [ str , Any ]] = Field ( default = None , description = "KVTransfer parameters used for disaggregated serving." ) 
+Embeddings API ¶ 
+Our Embeddings API is compatible with OpenAI's Embeddings API ;
+you can use the official OpenAI Python client to interact with it. 
+If the model has a chat template , you can replace 
+inputs with a list of 
+messages (same schema as Chat API )
+which will be treated as a single prompt to the model. 
+Code example: examples/online_serving/openai_embedding_client.py 
+Multi-modal inputs ¶ 
+You can pass multi-modal inputs to embedding models by defining a custom chat template for the server
+and passing a list of 
+messages in the request. Refer to the examples below for illustration. 
+VLM2Vec DSE-Qwen2-MRL 
+To serve the model: 
+vllm serve TIGER-Lab/VLM2Vec-Full --task embed \ --trust-remote-code \ --max-model-len 4096 \ --chat-template examples/template_vlm2vec.jinja
+Warning 
+Since VLM2Vec has the same model architecture as Phi-3.5-Vision, we have to explicitly pass 
+--task embed 
+to run this model in embedding mode instead of text generation mode. 
+The custom chat template is completely different from the original one for this model,
+and can be found here: examples/template_vlm2vec.jinja 
+Since the request schema is not defined by OpenAI client, we post a request to the server using the lower-level 
+requests library: 
+import requests image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg" response = requests . post ( "http://localhost:8000/v1/embeddings" , json = { "model" : "TIGER-Lab/VLM2Vec-Full" , "messages" : [{ "role" : "user" , "content" : [ { "type" : "image_url" , "image_url" : { "url" : image_url }}, { "type" : "text" , "text" : "Represent the given image." }, ], }], "encoding_format" : "float" , }, ) response . raise_for_status () response_json = response . json () print ( "Embedding output:" , response_json [ "data" ][ 0 ][ "embedding" ]) 
+To serve the model: 
+vllm serve MrLight/dse-qwen2-2b-mrl-v1 --task embed \ --trust-remote-code \ --max-model-len 8192 \ --chat-template examples/template_dse_qwen2_vl.jinja
+Warning 
+Like with VLM2Vec, we have to explicitly pass 
+--task embed . 
+Additionally, 
+MrLight/dse-qwen2-2b-mrl-v1 requires an EOS token for embeddings, which is handled
+by a custom chat template: examples/template_dse_qwen2_vl.jinja 
+Warning 
+MrLight/dse-qwen2-2b-mrl-v1 requires a placeholder image of the minimum image size for text query embeddings. See the full code
+example below for details. 
+Full example: examples/online_serving/openai_chat_embedding_client_for_multimodal.py 
+Extra parameters ¶ 
+The following pooling parameters are supported. 
+additional_data : Optional [ Any ] = None 
+The following extra parameters are supported by default: 
+add_special_tokens : bool = Field ( default = True , description = ( "If true (the default), special tokens (e.g. BOS) will be added to " "the prompt." ), ) priority : int = Field ( default = 0 , description = ( "The priority of the request (lower means earlier handling; " "default: 0). Any priority other than 0 will raise an error " "if the served model does not use priority scheduling." ), ) 
+For chat-like input (i.e. if 
+messages is passed), these extra parameters are supported instead: 
+add_special_tokens : bool = Field ( default = False , description = ( "If true, special tokens (e.g. BOS) will be added to the prompt " "on top of what is added by the chat template. " "For most models, the chat template takes care of adding the " "special tokens so this should be set to false (as is the " "default)." ), ) chat_template : Optional [ str ] = Field ( default = None , description = ( "A Jinja template to use for this conversion. " "As of transformers v4.44, default chat template is no longer " "allowed, so you must provide a chat template if the tokenizer " "does not define one." ), ) chat_template_kwargs : Optional [ dict [ str , Any ]] = Field ( default = None , description = ( "Additional kwargs to pass to the template renderer. " "Will be accessible by the chat template." ), ) mm_processor_kwargs : Optional [ dict [ str , Any ]] = Field ( default = None , description = ( "Additional kwargs to pass to the HF processor." ), ) priority : int = Field ( default = 0 , description = ( "The priority of the request (lower means earlier handling; " "default: 0). Any priority other than 0 will raise an error " "if the served model does not use priority scheduling." ), ) 
+Transcriptions API ¶ 
+Our Transcriptions API is compatible with OpenAI's Transcriptions API ;
+you can use the official OpenAI Python client to interact with it. 
+Note 
+To use the Transcriptions API, please install with extra audio dependencies using 
+pip install vllm[audio] . 
+Code example: examples/online_serving/openai_transcription_client.py 
+Extra Parameters ¶ 
+The following sampling parameters are supported. 
+temperature : float = Field ( default = 0.0 ) """The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused / deterministic. If set to 0, the model will use [log probability](https://en.wikipedia.org/wiki/Log_probability) to automatically increase the temperature until certain thresholds are hit. """ top_p : Optional [ float ] = None """Enables nucleus (top-p) sampling, where tokens are selected from the smallest possible set whose cumulative probability exceeds `p`. """ top_k : Optional [ int ] = None """Limits sampling to the `k` most probable tokens at each step.""" min_p : Optional [ float ] = None """Filters out tokens with a probability lower than `min_p`, ensuring a minimum likelihood threshold during sampling. """ seed : Optional [ int ] = Field ( None , ge = _LONG_INFO . min , le = _LONG_INFO . max ) """The seed to use for sampling.""" frequency_penalty : Optional [ float ] = 0.0 """The frequency penalty to use for sampling.""" repetition_penalty : Optional [ float ] = None """The repetition penalty to use for sampling.""" presence_penalty : Optional [ float ] = 0.0 """The presence penalty to use for sampling.""" 
+The following extra parameters are supported: 
+stream : Optional [ bool ] = False """Custom field not present in the original OpenAI definition. When set, it will enable output to be streamed in a similar fashion as the Chat Completion endpoint. """ # Flattened stream option to simplify form data. stream_include_usage : Optional [ bool ] = False stream_continuous_usage_stats : Optional [ bool ] = False 
+Tokenizer API ¶ 
+Our Tokenizer API is a simple wrapper over HuggingFace-style tokenizers .
+It consists of two endpoints: 
+/tokenize corresponds to calling 
+tokenizer.encode() . 
+/detokenize corresponds to calling 
+tokenizer.decode() . 
+Pooling API ¶ 
+Our Pooling API encodes input prompts using a pooling model and returns the corresponding hidden states. 
+The input format is the same as Embeddings API , but the output data can contain an arbitrary nested list, not just a 1-D list of floats. 
+Code example: examples/online_serving/openai_pooling_client.py 
+Classification API ¶ 
+Our Classification API directly supports Hugging Face sequence-classification models such as ai21labs/Jamba-tiny-reward-dev and jason9693/Qwen2.5-1.5B-apeach . 
+We automatically wrap any other transformer via 
+as_classification_model() , which pools on the last token, attaches a 
+RowParallelLinear head, and applies a softmax to produce per-class probabilities. 
+Code example: examples/online_serving/openai_classification_client.py 
+Example Requests ¶ 
+You can classify multiple texts by passing an array of strings: 
+Request: 
+curl -v "http://127.0.0.1:8000/classify" \ -H "Content-Type: application/json" \ -d '{ "model": "jason9693/Qwen2.5-1.5B-apeach", "input": [ "Loved the new café—coffee was great.", "This update broke everything. Frustrating." ] }' 
+Response: 
+{ "id" : "classify-7c87cac407b749a6935d8c7ce2a8fba2" ,
+"object" : "list" ,
+"created" : 1745383065 ,
+"model" : "jason9693/Qwen2.5-1.5B-apeach" ,
+"data" : [ { "index" : 0 ,
+"label" : "Default" ,
+"probs" : [ 0 .565970778465271,
+0 .4340292513370514
+] ,
+"num_classes" : 2 } ,
+{ "index" : 1 ,
+"label" : "Spoiled" ,
+"probs" : [ 0 .26448777318000793,
+0 .7355121970176697
+] ,
+"num_classes" : 2 } ] ,
+"usage" : { "prompt_tokens" : 20 ,
+"total_tokens" : 20 ,
+"completion_tokens" : 0 ,
+"prompt_tokens_details" : null
+} } 
+You can also pass a string directly to the 
+input field: 
+Request: 
+curl -v "http://127.0.0.1:8000/classify" \ -H "Content-Type: application/json" \ -d '{ "model": "jason9693/Qwen2.5-1.5B-apeach", "input": "Loved the new café—coffee was great." }' 
+Response: 
+{ "id" : "classify-9bf17f2847b046c7b2d5495f4b4f9682" ,
+"object" : "list" ,
+"created" : 1745383213 ,
+"model" : "jason9693/Qwen2.5-1.5B-apeach" ,
+"data" : [ { "index" : 0 ,
+"label" : "Default" ,
+"probs" : [ 0 .565970778465271,
+0 .4340292513370514
+] ,
+"num_classes" : 2 } ] ,
+"usage" : { "prompt_tokens" : 10 ,
+"total_tokens" : 10 ,
+"completion_tokens" : 0 ,
+"prompt_tokens_details" : null
+} } 
+Extra parameters ¶ 
+The following pooling parameters are supported. 
+additional_data : Optional [ Any ] = None 
+The following extra parameters are supported: 
+priority : int = Field ( default = 0 , description = ( "The priority of the request (lower means earlier handling; " "default: 0). Any priority other than 0 will raise an error " "if the served model does not use priority scheduling." ), ) 
+Score API ¶ 
+Our Score API can apply a cross-encoder model or an embedding model to predict scores for sentence pairs. When using an embedding model the score corresponds to the cosine similarity between each embedding pair.
+Usually, the score for a sentence pair refers to the similarity between two sentences, on a scale of 0 to 1. 
+You can find the documentation for cross encoder models at sbert.net . 
+Code example: examples/online_serving/openai_cross_encoder_score.py 
+Single inference ¶ 
+You can pass a string to both 
+text_1 and 
+text_2 , forming a single sentence pair. 
+Request: 
+curl -X 'POST' \ 'http://127.0.0.1:8000/score' \ -H 'accept: application/json' \ -H 'Content-Type: application/json' \ -d '{ "model": "BAAI/bge-reranker-v2-m3", "encoding_format": "float", "text_1": "What is the capital of France?", "text_2": "The capital of France is Paris." }' 
+Response: 
+{ "id" : "score-request-id" ,
+"object" : "list" ,
+"created" : 693447 ,
+"model" : "BAAI/bge-reranker-v2-m3" ,
+"data" : [ { "index" : 0 ,
+"object" : "score" ,
+"score" : 1 } ] ,
+"usage" : {} } 
+Batch inference ¶ 
+You can pass a string to 
+text_1 and a list to 
+text_2 , forming multiple sentence pairs
+where each pair is built from 
+text_1 and a string in 
+text_2 .
+The total number of pairs is 
+len(text_2) . 
+Request: 
+curl -X 'POST' \ 'http://127.0.0.1:8000/score' \ -H 'accept: application/json' \ -H 'Content-Type: application/json' \ -d '{ "model": "BAAI/bge-reranker-v2-m3", "text_1": "What is the capital of France?", "text_2": [ "The capital of Brazil is Brasilia.", "The capital of France is Paris." ] }' 
+Response: 
+{ "id" : "score-request-id" ,
+"object" : "list" ,
+"created" : 693570 ,
+"model" : "BAAI/bge-reranker-v2-m3" ,
+"data" : [ { "index" : 0 ,
+"object" : "score" ,
+"score" : 0 .001094818115234375
+} ,
+{ "index" : 1 ,
+"object" : "score" ,
+"score" : 1 } ] ,
+"usage" : {} } 
+You can pass a list to both 
+text_1 and 
+text_2 , forming multiple sentence pairs
+where each pair is built from a string in 
+text_1 and the corresponding string in 
+text_2 (similar to 
+zip() ).
+The total number of pairs is 
+len(text_2) . 
+Request: 
+curl -X 'POST' \ 'http://127.0.0.1:8000/score' \ -H 'accept: application/json' \ -H 'Content-Type: application/json' \ -d '{ "model": "BAAI/bge-reranker-v2-m3", "encoding_format": "float", "text_1": [ "What is the capital of Brazil?", "What is the capital of France?" ], "text_2": [ "The capital of Brazil is Brasilia.", "The capital of France is Paris." ] }' 
+Response: 
+{ "id" : "score-request-id" ,
+"object" : "list" ,
+"created" : 693447 ,
+"model" : "BAAI/bge-reranker-v2-m3" ,
+"data" : [ { "index" : 0 ,
+"object" : "score" ,
+"score" : 1 } ,
+{ "index" : 1 ,
+"object" : "score" ,
+"score" : 1 } ] ,
+"usage" : {} } 
+Extra parameters ¶ 
+The following pooling parameters are supported. 
+additional_data : Optional [ Any ] = None 
+The following extra parameters are supported: 
+priority : int = Field ( default = 0 , description = ( "The priority of the request (lower means earlier handling; " "default: 0). Any priority other than 0 will raise an error " "if the served model does not use priority scheduling." ), ) 
+Re-rank API ¶ 
+Our Re-rank API can apply an embedding model or a cross-encoder model to predict relevant scores between a single query, and
+each of a list of documents. Usually, the score for a sentence pair refers to the similarity between two sentences, on
+a scale of 0 to 1. 
+You can find the documentation for cross encoder models at sbert.net . 
+The rerank endpoints support popular re-rank models such as 
+BAAI/bge-reranker-base and other models supporting the
+score task. Additionally, 
+/rerank , 
+/v1/rerank , and 
+/v2/rerank 
+endpoints are compatible with both Jina AI's re-rank API interface and
+Cohere's re-rank API interface to ensure compatibility with
+popular open-source tools. 
+Code example: examples/online_serving/jinaai_rerank_client.py 
+Example Request ¶ 
+Note that the 
+top_n request parameter is optional and will default to the length of the 
+documents field.
+Result documents will be sorted by relevance, and the 
+index property can be used to determine original order. 
+Request: 
+curl -X 'POST' \ 'http://127.0.0.1:8000/v1/rerank' \ -H 'accept: application/json' \ -H 'Content-Type: application/json' \ -d '{ "model": "BAAI/bge-reranker-base", "query": "What is the capital of France?", "documents": [ "The capital of Brazil is Brasilia.", "The capital of France is Paris.", "Horses and cows are both animals" ] }' 
+Response: 
+{ "id" : "rerank-fae51b2b664d4ed38f5969b612edff77" ,
+"model" : "BAAI/bge-reranker-base" ,
+"usage" : { "total_tokens" : 56 } ,
+"results" : [ { "index" : 1 ,
+"document" : { "text" : "The capital of France is Paris." } ,
+"relevance_score" : 0 .99853515625
+} ,
+{ "index" : 0 ,
+"document" : { "text" : "The capital of Brazil is Brasilia." } ,
+"relevance_score" : 0 .0005860328674316406
+} ] } 
+Extra parameters ¶ 
+The following pooling parameters are supported. 
+additional_data : Optional [ Any ] = None 
+The following extra parameters are supported: 
+priority : int = Field ( default = 0 , description = ( "The priority of the request (lower means earlier handling; " "default: 0). Any priority other than 0 will raise an error " "if the served model does not use priority scheduling." ), ) 
+Back to top
+Made with
+Material for MkDocs
